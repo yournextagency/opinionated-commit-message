@@ -131,6 +131,15 @@ function errorMessageOnNonVerb(
 }
 
 function checkSubject(subject: string, inputs: input.Inputs): string[] {
+  // [TASK-0000]
+  const taskRe = new RegExp('^\\[[A-Z]+-\\d+\\] ');
+
+  if (!taskRe.test(subject)) {
+    throw new Error('Commit message must start with [TASK-0000] YouTrack task');
+  }
+
+  const subjectWoTask = subject.replace(taskRe, '');
+
   // Pre-condition
   for (const verb of inputs.additionalVerbs) {
     if (verb.length === 0) {
@@ -149,7 +158,7 @@ function checkSubject(subject: string, inputs: input.Inputs): string[] {
   // Tolerate the hash code referring, e.g., to a pull request.
   // These hash codes are usually added automatically by GitHub and
   // similar services.
-  const subjectWoCode = subject.replace(suffixHashCodeRe, '');
+  const subjectWoCode = subjectWoTask.replace(suffixHashCodeRe, '');
 
   if (subjectWoCode.length > inputs.maxSubjectLength) {
     errors.push(
@@ -225,6 +234,14 @@ function checkBody(
 
   if (bodyLines.length === 1 && bodyLines[0].trim() === '') {
     errors.push('Unexpected empty body');
+    return errors;
+  }
+
+  // Minimum character body length
+  if (inputs.minBodyLength && bodyLines.join().length < inputs.minBodyLength) {
+    errors.push(
+      `Body must contain at least ${inputs.minBodyLength} characters.`,
+    );
     return errors;
   }
 

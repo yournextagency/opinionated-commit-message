@@ -29029,6 +29029,7 @@ class Inputs {
         this.allowOneLiners = values.allowOneLiners;
         this.additionalVerbs = values.additionalVerbs;
         this.maxSubjectLength = values.maxSubjectLength;
+        this.minBodyLength = values.minBodyLength;
         this.maxBodyLineLength = values.maxBodyLineLength;
         this.enforceSignOff = values.enforceSignOff;
         this.validatePullRequestCommits = values.validatePullRequestCommits;
@@ -29059,7 +29060,7 @@ class MaybeInputs {
 }
 exports.MaybeInputs = MaybeInputs;
 function parseInputs(rawInputs) {
-    const { additionalVerbsInput = '', pathToAdditionalVerbsInput = '', allowOneLinersInput = '', maxSubjectLengthInput = '', maxBodyLineLengthInput = '', enforceSignOffInput = '', validatePullRequestCommitsInput = '', skipBodyCheckInput = '', ignoreMergeCommitsInput = '', ignorePatternsInput = '', } = rawInputs;
+    const { additionalVerbsInput = '', pathToAdditionalVerbsInput = '', allowOneLinersInput = '', maxSubjectLengthInput = '', minBodyLengthInput = '', maxBodyLineLengthInput = '', enforceSignOffInput = '', validatePullRequestCommitsInput = '', skipBodyCheckInput = '', ignoreMergeCommitsInput = '', ignorePatternsInput = '', } = rawInputs;
     const additionalVerbs = new Set();
     const hasAdditionalVerbsInput = additionalVerbsInput.length > 0;
     if (additionalVerbsInput) {
@@ -29090,6 +29091,13 @@ function parseInputs(rawInputs) {
     if (Number.isNaN(maxSubjectLength)) {
         return new MaybeInputs(null, 'Unexpected value for max-subject-line-length. ' +
             `Expected a number or nothing, got ${maxSubjectLengthInput}`);
+    }
+    const minBodyLength = !minBodyLengthInput
+        ? 0
+        : parseInt(minBodyLengthInput, 10);
+    if (Number.isNaN(minBodyLength)) {
+        return new MaybeInputs(null, 'Unexpected value for min-body-length. ' +
+            `Expected a number or nothing, got ${minBodyLengthInput}`);
     }
     const maxBodyLineLength = !maxBodyLineLengthInput
         ? 72
@@ -29139,6 +29147,7 @@ function parseInputs(rawInputs) {
         allowOneLiners,
         additionalVerbs,
         maxSubjectLength,
+        minBodyLength,
         maxBodyLineLength,
         enforceSignOff,
         validatePullRequestCommits,
@@ -29295,6 +29304,12 @@ function errorMessageOnNonVerb(firstWord, inputs) {
     return parts.join(' ');
 }
 function checkSubject(subject, inputs) {
+    // [TASK-0000]
+    const taskRe = new RegExp('^\\[[A-Z]+-\\d+\\] ');
+    if (!taskRe.test(subject)) {
+        throw new Error('Commit message must start with [TASK-0000] YouTrack task');
+    }
+    const subjectWoTask = subject.replace(taskRe, '');
     // Pre-condition
     for (const verb of inputs.additionalVerbs) {
         if (verb.length === 0) {
@@ -29308,7 +29323,7 @@ function checkSubject(subject, inputs) {
     // Tolerate the hash code referring, e.g., to a pull request.
     // These hash codes are usually added automatically by GitHub and
     // similar services.
-    const subjectWoCode = subject.replace(suffixHashCodeRe, '');
+    const subjectWoCode = subjectWoTask.replace(suffixHashCodeRe, '');
     if (subjectWoCode.length > inputs.maxSubjectLength) {
         errors.push(`The subject exceeds the limit of ${inputs.maxSubjectLength} characters ` +
             `(got: ${subject.length}, JSON: ${JSON.stringify(subjectWoCode)}).` +
@@ -29359,6 +29374,11 @@ function checkBody(subject, bodyLines, inputs) {
     }
     if (bodyLines.length === 1 && bodyLines[0].trim() === '') {
         errors.push('Unexpected empty body');
+        return errors;
+    }
+    // Minimum character body length
+    if (inputs.minBodyLength && bodyLines.join().length < inputs.minBodyLength) {
+        errors.push(`Body must contain at least ${inputs.minBodyLength} characters.`);
         return errors;
     }
     for (const [i, line] of bodyLines.entries()) {
@@ -29555,6 +29575,9 @@ async function runWithExceptions() {
     const maxSubjectLengthInput = core.getInput('max-subject-line-length', {
         required: false,
     });
+    const minBodyLengthInput = core.getInput('min-body-length', {
+        required: false,
+    });
     const maxBodyLineLengthInput = core.getInput('max-body-line-length', {
         required: false,
     });
@@ -29578,6 +29601,7 @@ async function runWithExceptions() {
         pathToAdditionalVerbsInput,
         allowOneLinersInput,
         maxSubjectLengthInput,
+        minBodyLengthInput,
         maxBodyLineLengthInput,
         enforceSignOffInput,
         validatePullRequestCommitsInput,

@@ -218,6 +218,7 @@ it(
       allowOneLiners: false,
       additionalVerbs: new Set<string>('table'),
       maxSubjectLength: 50,
+      minBodyLength: 0,
       maxBodyLineLength: 72,
       enforceSignOff: false,
       validatePullRequestCommits: false,
